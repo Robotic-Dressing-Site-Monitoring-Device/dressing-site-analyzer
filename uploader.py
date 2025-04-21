@@ -2,39 +2,51 @@
 import os
 import io
 import json
-from datetime import datetime
-from google.cloud import storage
+from datetime import datetime, timezone
+from google.cloud import storage, firestore
 from dotenv import load_dotenv
+import base64
 
 # env configuration
 load_dotenv()
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 GCS_TARGET_FOLDER = os.getenv("GCS_TARGET_FOLDER")
 GCS_KEY_PATH = os.getenv("GCS_KEY_PATH")
+TEST_PATIENT = os.getenv("PATIENT_ID")
 
-def upload_frame_to_gcs(frame_buffer, inference_result=None, annotated_image_bytes=None):
+# Uploads raw image to GCS bucket and returns image URL.
+def upload_frame_to_gcs(image_bytes, photo_name):
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    folder_path = f"{GCS_TARGET_FOLDER}/{timestamp}/"
+    folder_path = f"{GCS_TARGET_FOLDER}/"
+    blob_path = f"{folder_path}{photo_name}.jpg"
 
-    # Encoding image into bytes (only used for the raw image, but we're using the image from Roboflow. Just leaving this in in case.)
-    buffer = frame_buffer
-    image_bytes = io.BytesIO(buffer.tobytes())
+    client = storage.Client.from_service_account_json(GCS_KEY_PATH)
+    bucket = client.bucket(GCS_BUCKET_NAME)
+    blob = bucket.blob(blob_path)
 
-    # Initialize GCS connection
-    storage_client = storage.Client.from_service_account_json(GCS_KEY_PATH)
-    bucket = storage_client.bucket(GCS_BUCKET_NAME)
+    blob.upload_from_file(io.BytesIO(image_bytes), content_type="image/jpeg")
+    blob.make_public()
 
-    # Upload inference result JSON
-    if inference_result:
-        json_bytes = io.BytesIO(json.dumps(inference_result, indent=2).encode("utf-8"))
-        json_blob = bucket.blob(f"{folder_path}result.json")
-        json_blob.upload_from_file(json_bytes, content_type="application/json")
-        print(f"Uploaded JSON to gs://{GCS_BUCKET_NAME}/{folder_path}result.json")
+    print(f"Uploaded image to: {blob.public_url}")
+    return blob.public_url, photo_name
 
-    # Upload image
-    if annotated_image_bytes:
-        annotated_blob = bucket.blob(f"{folder_path}annotated.jpg")
-        annotated_blob.upload_from_file(io.BytesIO(annotated_image_bytes), content_type="image/jpeg")
-        print(f"Uploaded annotated image to gs://{GCS_BUCKET_NAME}/{folder_path}annotated.jpg")
+# Creates firestore doc. Firestore will handle the Roboflow model API internally.
+def upload_frame_to_firestore(image_url, photo_name):
+    db = firestore.Client.from_service_account_json(GCS_KEY_PATH)
+    timestamp = datetime.now(timezone.utc).isoformat()
 
-    return folder_path
+    doc_path = f"patients/{TEST_PATIENT}/photos/{timestamp}"
+    doc_ref = db.document(doc_path)
+
+    data = {
+        "analyzed": False,
+        "imageURL": image_url,
+        "issue": "unknown",
+        "patient": TEST_PATIENT.replace("_", " ").title(),
+        "photoName": photo_name,
+        "status": "pending",
+        "time": timestamp
+    }
+
+    doc_ref.set(data)
+    print(f"Firestore doc written to: {doc_path}")

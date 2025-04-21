@@ -11,7 +11,7 @@ import time
 from dotenv import load_dotenv
 from google.cloud import storage
 from ai import inference_helper
-from uploader import upload_frame_to_gcs
+from uploader import upload_frame_to_gcs, upload_frame_to_firestore
 
 def launch_gui():
     window = tk.Tk()
@@ -49,14 +49,15 @@ def launch_gui():
 
         def send_api():
             try:
-                result, annotated_image_bytes, buffer = inference_helper(frame)
-                print("Roboflow Result:", result)
+                success, buffer = cv2.imencode(".jpg", frame)
+                if not success:
+                    raise ValueError("Failed to encode frame")
+                photo_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-                if result.get("predictions"):
-                    upload_frame_to_gcs(buffer, result, annotated_image_bytes)
-                    messagebox.showinfo("Result", "Inference complete. Annotated image and prediction JSON uploaded to GCS.")
-                else:
-                    messagebox.showinfo("Result", "No predictions were made.")
+                image_url, _ = upload_frame_to_gcs(buffer.tobytes(), photo_name)
+                upload_frame_to_firestore(image_url, photo_name)
+
+                messagebox.showinfo("Result", "Image and metadata uploaded to Firestore")
             except Exception as e:
                 messagebox.showerror("Error", str(e))
 
