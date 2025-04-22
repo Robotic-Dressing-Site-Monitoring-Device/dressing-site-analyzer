@@ -16,7 +16,8 @@ TEST_PATIENT = os.getenv("PATIENT_ID")
 
 # Uploads raw image to GCS bucket and returns image URL.
 def upload_frame_to_gcs(image_bytes, photo_name):
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    #timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    timestamp = firestore.SERVER_TIMESTAMP
     folder_path = f"{GCS_TARGET_FOLDER}/"
     blob_path = f"{folder_path}{photo_name}.jpg"
 
@@ -33,9 +34,10 @@ def upload_frame_to_gcs(image_bytes, photo_name):
 # Creates firestore doc. Firestore will handle the Roboflow model API internally.
 def upload_frame_to_firestore(image_url, photo_name):
     db = firestore.Client.from_service_account_json(GCS_KEY_PATH)
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestampName = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    timestamp = firestore.SERVER_TIMESTAMP
 
-    doc_path = f"patients/{TEST_PATIENT}/photos/{timestamp}"
+    doc_path = f"patients/{TEST_PATIENT}/photos/{timestampName}"
     doc_ref = db.document(doc_path)
 
     data = {

@@ -52,7 +52,7 @@ def launch_gui():
                 success, buffer = cv2.imencode(".jpg", frame)
                 if not success:
                     raise ValueError("Failed to encode frame")
-                photo_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                photo_name = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
 
                 image_url, _ = upload_frame_to_gcs(buffer.tobytes(), photo_name)
                 upload_frame_to_firestore(image_url, photo_name)
