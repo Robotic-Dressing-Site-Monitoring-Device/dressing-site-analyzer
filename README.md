@@ -26,5 +26,5 @@ main.py
  
 **Code Creator**
 - Daniel Chang
-  dsc5504@psu.edu
+  danielchang10202@gmail.com
   
